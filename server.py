@@ -2,10 +2,8 @@ import socket
 import select
 import json
 
-import message
-import user
-import chat
-import file_service
+from lib_for_messanger import *
+
 
 HEADER_LENGTH = 10
 HOST = (socket.gethostname(), 10000)
@@ -22,15 +20,15 @@ processed_client_list = {}
 
 users_list = []
 users_file_path = "users.json"
-users_file_service = file_service.FileService(users_file_path, users_list, user.User)
+users_file_service = FileService(users_file_path, users_list, user.User)
 
 chats_list = []
 chats_file_path = "chats.json"
-chats_file_service = file_service.FileService(chats_file_path, chats_list, chat.Chat)
+chats_file_service = FileService(chats_file_path, chats_list, chat.Chat)
 
 messages_list = []
 messages_file_path = "message.json"
-messages_file_service = file_service.FileService(messages_file_path, messages_list, message.Message)
+messages_file_service = FileService(messages_file_path, messages_list, message.Message)
 
 
 def receive_msg(client):
