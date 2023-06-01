@@ -2,14 +2,14 @@ bleach==6.0.0
 certifi==2023.5.7
 cffi==1.15.1
 charset-normalizer==3.1.0
-cryptography==41.0.0
+cryptography==41.0.1
 docutils==0.20.1
 idna==3.4
 importlib-metadata==6.6.0
 jaraco.classes==3.2.3
 jeepney==0.8.0
 keyring==23.13.1
-lib-for-messanger==0.1
+lib-for-messanger==0.7
 markdown-it-py==2.2.0
 mdurl==0.1.2
 more-itertools==9.1.0
@@ -20,7 +20,7 @@ readme-renderer==37.3
 requests==2.31.0
 requests-toolbelt==1.0.0
 rfc3986==2.0.0
-rich==13.3.5
+rich==13.4.1
 SecretStorage==3.3.3
 six==1.16.0
 twine==4.0.2

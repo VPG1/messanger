@@ -4,7 +4,6 @@ import json
 
 from lib_for_messanger import *
 
-
 HEADER_LENGTH = 10
 HOST = (socket.gethostname(), 10000)
 
@@ -40,6 +39,7 @@ def receive_msg(client):
 
 
 def send_msg(client, json_object):
+    print("message send: ", json_object)
     msg = json.dumps(json_object).encode('UTF-8')
     header = f"{len(msg):<{HEADER_LENGTH}}".encode('UTF-8')
     client.sendall(header + msg)
@@ -90,9 +90,17 @@ def process_new_client(new_client_socket):
 
             processed_client_list[new_client_socket] = new_user
 
+            answer = {"request_type": request_data["request_type"],
+                      "answer": "success"}
+            send_msg(new_client_socket, answer)
+
             print("new user in system")
             print("new user online")
         else:
+            answer = {"request_type": request_data["request_type"],
+                      "answer": "success"}
+            send_msg(new_client_socket, answer)
+
             print("user already exist")
     elif request_data["request_type"] == "entrance":
         new_user = find_user_by_name(request_data["name"])
@@ -102,12 +110,26 @@ def process_new_client(new_client_socket):
             if request_data["password"] == new_user.get_password():
                 processed_client_list[new_client_socket] = new_user
 
+                answer = {"request_type": request_data["request_type"],
+                          "answer": "success",
+                          "user": new_user.to_json_object()}
+
+                send_msg(new_client_socket, answer)
+
                 users_file_service.save_data()
 
                 print("user online")
             else:
+                answer = {"request_type": request_data["request_type"],
+                          "answer": "wrong_password"}
+                send_msg(new_client_socket, answer)
+
                 print("wrong password")
         else:
+            answer = {"request_type": request_data["request_type"],
+                      "answer": "user_does_not_exist"}
+            send_msg(new_client_socket, answer)
+
             print("no such user exists")
 
     else:
@@ -149,34 +171,45 @@ def process_request_from_client(client_socket):
 
         if chat_object is not None:
             if request_data["chat_password"] == chat_object.get_chat_password():
-                chat_object.add_new_member(processed_client_list[client_socket].get_name())
-                processed_client_list[client_socket].join_to_chat(chat_object.get_chat_name())
+                print(processed_client_list[client_socket].get_name())
+                if processed_client_list[client_socket].get_name() not in chat_object.get_members():
+                    chat_object.add_new_member(processed_client_list[client_socket].get_name())
+                    processed_client_list[client_socket].join_to_chat(chat_object.get_chat_name())
 
-                users_file_service.save_data()
-                chats_file_service.save_data()
+                    users_file_service.save_data()
+                    chats_file_service.save_data()
 
-                print("user joined to chat")
+                    print("user joined to chat")
+                else:
+                    print("user is already in the chat")
             else:
                 print("wrong password")
         else:
             print("chat doesn't exist")
-    elif request_data["reqeust_type"] == "send_message":
+    elif request_data["request_type"] == "send_message":
         chat_object = find_chat_by_name(request_data["chat_name"])
 
         if chat_object is not None:
-            for receiver_socket, user_object in processed_client_list.items():
-                if user_object.get_name() in chat_object.get_members() and client_socket != receiver_socket:
-                    new_message = message.Message(user_object.get_name(), user_object)
-                    send_msg(client_socket, "qwer")
+            user_object = processed_client_list[client_socket]
+
+            if user_object.get_name() in chat_object.get_members():
+                new_message = message.Message(user_object.get_name(), request_data["message_text"])
+
+                messages_list.append(new_message)
+                chat_object.add_new_message_id(len(messages_list) - 1)
+
+                chats_file_service.save_data()
+                messages_file_service.save_data()
+
+                for receiver_socket, user_object in processed_client_list.items():
+                    if user_object.get_name() in chat_object.get_members() and client_socket != receiver_socket:
+                        send_msg(receiver_socket, new_message.to_json_object())
+            else:
+                print("user not in chat")
         else:
             print("chat doesn't exist")
     else:
         print("invalid request type")
-
-
-def messaging(client_socket):
-    while True:
-        pass
 
 
 while True:
