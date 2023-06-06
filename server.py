@@ -86,33 +86,40 @@ def process_new_client(new_client_socket):
             # users_file_service.add_new_element(new_user)
             users_list.append(new_user)
 
-            users_file_service.save_data()
-
             processed_client_list[new_client_socket] = new_user
 
             answer = {"request_type": request_data["request_type"],
                       "answer": "success"}
             send_msg(new_client_socket, answer)
 
+            users_file_service.save_data()
+
             print("new user in system")
             print("new user online")
         else:
             answer = {"request_type": request_data["request_type"],
-                      "answer": "success"}
+                      "answer": "user_exist"}
             send_msg(new_client_socket, answer)
 
             print("user already exist")
     elif request_data["request_type"] == "entrance":
         new_user = find_user_by_name(request_data["name"])
-        # new_user = users_file_service.find_element_in_file_by_name(request_data["name"])
 
         if new_user is not None:
             if request_data["password"] == new_user.get_password():
                 processed_client_list[new_client_socket] = new_user
 
+                chats = {}
+                for chat_name in new_user.get_chats():
+                    chat_object = find_chat_by_name(chat_name)
+                    chats[chat_name] = []
+                    for message_id in chat_object.get_messages_id():
+                        chats[chat_name].append(messages_list[message_id].to_json_object())
+
                 answer = {"request_type": request_data["request_type"],
                           "answer": "success",
-                          "user": new_user.to_json_object()}
+                          "user": new_user.to_json_object(),
+                          "chats_info": chats}
 
                 send_msg(new_client_socket, answer)
 
@@ -157,13 +164,20 @@ def process_request_from_client(client_socket):
             chats_list.append(new_chat)
             processed_client_list[client_socket].join_to_chat(new_chat.get_chat_name())
 
+            answer = {"request_type": request_data["request_type"],
+                      "answer": "success",
+                      "chat_name": request_data["chat_name"]}
+            send_msg(client_socket, answer)
+
             users_file_service.save_data()
             chats_file_service.save_data()
 
-            # chats_file_service.add_new_element(new_chat)
-
             print("chat created")
         else:
+            answer = {"request_type": request_data["request_type"],
+                      "answer": "chat_exist"}
+            send_msg(client_socket, answer)
+
             print("chat with the same name already exists")
     elif request_data["request_type"] == "join_to_chat":
         chat_object = find_chat_by_name(request_data["chat_name"])
@@ -176,15 +190,35 @@ def process_request_from_client(client_socket):
                     chat_object.add_new_member(processed_client_list[client_socket].get_name())
                     processed_client_list[client_socket].join_to_chat(chat_object.get_chat_name())
 
+                    messages = []
+                    for message_id in chat_object.get_messages_id():
+                        messages.append(messages_list[message_id].to_json_object())
+
+                    answer = {"request_type": request_data["request_type"],
+                              "answer": "success",
+                              "chat_name": request_data["chat_name"],
+                              "messages": messages}
+                    send_msg(client_socket, answer)
+
                     users_file_service.save_data()
                     chats_file_service.save_data()
 
                     print("user joined to chat")
                 else:
+                    answer = {"request_type": request_data["request_type"],
+                              "answer": "user_in_chat"}
+                    send_msg(client_socket, answer)
                     print("user is already in the chat")
             else:
+                answer = {"request_type": request_data["request_type"],
+                          "answer": "wrong_password"}
+                send_msg(client_socket, answer)
                 print("wrong password")
         else:
+            answer = {"request_type": request_data["request_type"],
+                      "answer": "chat_does_not_exist"}
+            send_msg(client_socket, answer)
+
             print("chat doesn't exist")
     elif request_data["request_type"] == "send_message":
         chat_object = find_chat_by_name(request_data["chat_name"])
@@ -198,12 +232,15 @@ def process_request_from_client(client_socket):
                 messages_list.append(new_message)
                 chat_object.add_new_message_id(len(messages_list) - 1)
 
-                chats_file_service.save_data()
-                messages_file_service.save_data()
-
                 for receiver_socket, user_object in processed_client_list.items():
                     if user_object.get_name() in chat_object.get_members() and client_socket != receiver_socket:
-                        send_msg(receiver_socket, new_message.to_json_object())
+                        answer = {"request_type": request_data["request_type"],
+                                  "chat_name": request_data["chat_name"],
+                                  "message": new_message.to_json_object()}
+                        send_msg(receiver_socket, answer)
+
+                chats_file_service.save_data()
+                messages_file_service.save_data()
             else:
                 print("user not in chat")
         else:

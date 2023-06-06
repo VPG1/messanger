@@ -1,70 +1,3 @@
-# import socket
-# import json
-# import threading
-#
-# HEADER_LENGTH = 10
-#
-# HOST = (socket.gethostname(), 10000)
-#
-# client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-# client_socket.connect(HOST)
-# print('Connected to', HOST)
-#
-# stop = False
-#
-#
-# def receive():
-#     while not stop:
-#         msg_header = client_socket.recv(HEADER_LENGTH)
-#         msg_length = int(msg_header.decode('UTF-8').strip())
-#         print(json.loads(client_socket.recv(msg_length).decode('UTF-8')))
-#
-#
-# def send():
-#     data = {"request_type": "entrance",
-#             "name": "Alex",
-#             "password": "password"}
-#
-#     msg = json.dumps(data).encode('UTF-8')
-#     header = f"{len(msg):<{HEADER_LENGTH}}".encode('UTF-8')
-#
-#     client_socket.sendall(header + msg)
-#
-#     ######
-#
-#     # data = {"request_type": "join_to_chat",
-#     #         "chat_name": "Chat2",
-#     #         "chat_password": "password"}
-#     # msg = json.dumps(data).encode('UTF-8')
-#     # header = f"{len(msg):<{HEADER_LENGTH}}".encode('UTF-8')
-#     #
-#     # client_socket.sendall(header + msg)
-#
-#     ######
-#
-#     data = {"request_type": "send_message",
-#             "chat_name": "Chat2",
-#             "message_text": "ffff"}
-#
-#     msg = json.dumps(data).encode('UTF-8')
-#     header = f"{len(msg):<{HEADER_LENGTH}}".encode('UTF-8')
-#
-#     client_socket.sendall(header + msg)
-#
-#
-# receive_thread = threading.Thread(target=receive)
-# receive_thread.start()
-#
-# send()
-#
-# input()
-#
-# stop = True
-#
-# client_socket.close()
-
-###########################################
-
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
@@ -73,17 +6,15 @@ import json
 from lib_for_messanger import *
 import threading
 
-chats = {
-}
+chats = {}
 
 current_chat = None
 
 
-def receive_messages(sock):
+def receive_answers(sock):
     while True:
         try:
             answer = receive_msg(sock)
-            # data = receive_msg(sock)
             if not answer:
                 print('Соединение с сервером разорвано.')
                 break
@@ -99,10 +30,21 @@ def receive_messages(sock):
                 if answer["answer"] == "success":
                     print(type(answer["user"]))
                     user = User.from_json_object(answer["user"])
-                    for chat_name in user.get_chats():
-                        chats[chat_name] = []
+
+                    chats_info = answer["chats_info"]
+
+                    for chat_name, _messages in chats_info.items():
+                        messages_text = []
+                        for _message in _messages:
+                            message_object = Message.from_json_object(_message)
+                            if message_object.get_sender_name() == user.get_name():
+                                messages_text.append("You: " + message_object.get_message_text())
+                            else:
+                                messages_text.append(message_object.get_sender_name() + ": "
+                                                     + message_object.get_message_text())
+                        chats[chat_name] = messages_text
                         chat_listbox.insert(tk.END, chat_name)
-                    # messagebox.showinfo("Вход", answer["user"])
+
                     show_main_page()
                 elif answer["answer"] == "wrong_password":
                     messagebox.showinfo("Вход", "Неправильный пароль")
@@ -110,10 +52,48 @@ def receive_messages(sock):
                     messagebox.showinfo("Вход", "Пользователя не существует")
                 else:
                     messagebox.showerror("Ошибка", "!!!!!!!")
-            # listbox.insert(tk.END, data)
+            elif answer["request_type"] == "send_message":
+                chats[answer["chat_name"]].append(answer["message"]["sender_name"] + ": "
+                                                  + answer["message"]["message_text"])
+                if current_chat == answer["chat_name"]:
+                    listbox.delete(0, tk.END)
+                    for message_text in chats[current_chat]:
+                        listbox.insert(tk.END, message_text)
+
+                    listbox.see(tk.END)  # Прокрутка списка в самый низ
+            elif answer["request_type"] == "create_new_chat":
+                if answer["answer"] == "success":
+                    messagebox.showinfo("Создание новго чата", "Новый чат создан!")
+                    chats[answer["chat_name"]] = []
+                    update_chat_listbox()
+                    show_main_page()
+                elif answer["answer"] == "chat_exist":
+                    messagebox.showinfo("Создание новго чата", "Чат с таким именем уже существует")
+                else:
+                    messagebox.showerror("Ошибка", "!!!!!!!")
+            elif answer["request_type"] == "join_to_chat":
+                if answer["answer"] == "success":
+                    chat_messages_text = []
+                    for message_json_object in answer["messages"]:
+                        message_object = Message.from_json_object(message_json_object)
+                        chat_messages_text.append(message_object.get_sender_name() + ": "
+                                                  + message_object.get_message_text())
+
+                    chats[answer["chat_name"]] = chat_messages_text
+                    update_chat_listbox()
+                    show_main_page()
+                elif answer["answer"] == "user_in_chat":
+                    messagebox.showinfo("Вход в чат", "Пользователь уже в чате")
+                elif answer["answer"] == "wrong_password":
+                    messagebox.showinfo("Вход в чат", "Неправлильный пароль")
+                elif answer["answer"] == "chat_does_not_exist":
+                    messagebox.showinfo("Вход в чат", "Чата не существует")
+                else:
+                    messagebox.showerror("Ошибка", "!!!!!!!")
         except ConnectionResetError:
             print('Соединение с сервером разорвано.')
             break
+
 
 def send_msg(client, json_object):
     msg = json.dumps(json_object).encode('UTF-8')
@@ -139,22 +119,6 @@ def login():
                             "name": username,
                             "password": password}
     send_msg(client_socket, registration_request)
-    # answer = receive_msg(client_socket)
-
-    # if answer["answer"] == "success":
-    #     print(type(answer["user"]))
-    #     user = User.from_json_object(answer["user"])
-    #     for chat_name in user.get_chats():
-    #         chats[chat_name] = []
-    #         chat_listbox.insert(tk.END, chat_name)
-    #     # messagebox.showinfo("Вход", answer["user"])
-    #     show_main_page()
-    # elif answer["answer"] == "wrong_password":
-    #     messagebox.showinfo("Вход", "Неправильный пароль")
-    # elif answer["answer"] == "user_does_not_exist":
-    #     messagebox.showinfo("Вход", "Пользователя не существует")
-    # else:
-    #     messagebox.showerror("Ошибка", "!!!!!!!")
 
 
 def register():
@@ -173,12 +137,42 @@ def register():
         messagebox.showerror("Ошибка", "Пароли не совпадают.")
 
 
+def join_to_chat():
+    chat_name = login_entry_chat_name.get()
+    chat_password = login_entry_chat_password.get()
+
+    join_to_chat_request = {"request_type": "join_to_chat",
+                            "chat_name": chat_name,
+                            "chat_password": chat_password}
+
+    send_msg(client_socket, join_to_chat_request)
+
+def create_new_chat():
+    chat_name = register_entry_chat_name.get()
+    chat_password = register_entry_chat_password.get()
+    confirm_chat_password = register_entry_confirm_chat_password.get()
+
+    if chat_password == confirm_chat_password:
+        create_new_chat_request = {"request_type": "create_new_chat",
+                                   "chat_name": chat_name,
+                                   "chat_password": chat_password}
+        send_msg(client_socket, create_new_chat_request)
+    else:
+        messagebox.showerror("Ошибка", "Пароли не совпадают.")
+
+
 def send_message():
     message_text = entry.get()
     if message_text:
-        chats[current_chat].append(message_text)
-        listbox.insert(tk.END, message_text)
+        chats[current_chat].append("You: " + message_text)
+        listbox.insert(tk.END, "You:" + message_text)
         entry.delete(0, tk.END)
+
+        request = {"request_type": "send_message",
+                   "chat_name": current_chat,
+                   "message_text": message_text}
+
+        send_msg(client_socket, request)
         listbox.see(tk.END)  # Прокрутка списка в самый низ
 
 
@@ -193,6 +187,8 @@ def change_chat(event):
         for message_text in chats[current_chat]:
             listbox.insert(tk.END, message_text)
 
+        listbox.see(tk.END)  # Прокрутка списка в самый низ
+
         chat_frame.pack(fill=tk.BOTH, expand=True)
 
         # Подсветка выбранного чата
@@ -204,13 +200,16 @@ def change_chat(event):
 
 
 def update_chat_listbox():
-    for chat in chats:
-        chat_listbox.insert(tk.END, chat)
+    chat_listbox.delete(0, tk.END)
+    for chat_name in chats:
+        chat_listbox.insert(tk.END, chat_name)
 
 
 def show_login_page():
     main_frame.pack_forget()
     register_frame.pack_forget()
+    create_new_chat_frame.pack_forget()
+    join_to_chat_frame.pack_forget()
 
     login_frame.pack()
 
@@ -218,6 +217,8 @@ def show_login_page():
 def show_register_page():
     main_frame.pack_forget()
     login_frame.pack_forget()
+    create_new_chat_frame.pack_forget()
+    join_to_chat_frame.pack_forget()
 
     register_frame.pack()
 
@@ -225,8 +226,28 @@ def show_register_page():
 def show_main_page():
     login_frame.pack_forget()
     register_frame.pack_forget()
+    create_new_chat_frame.pack_forget()
+    join_to_chat_frame.pack_forget()
 
     main_frame.pack()
+
+
+def show_create_new_chat_page():
+    login_frame.pack_forget()
+    register_frame.pack_forget()
+    main_frame.pack_forget()
+    join_to_chat_frame.pack_forget()
+
+    create_new_chat_frame.pack()
+
+
+def show_join_to_chat_page():
+    login_frame.pack_forget()
+    register_frame.pack_forget()
+    create_new_chat_frame.pack_forget()
+    main_frame.pack_forget()
+
+    join_to_chat_frame.pack()
 
 
 HEADER_LENGTH = 10
@@ -238,11 +259,15 @@ client_socket.connect(HOST)
 print('Connected to', HOST)
 
 root = tk.Tk()
-root.title("Вход и регистрация")
+root.title("Mecceнджер")
 
 # Создание фреймов
 login_frame = tk.Frame(root)
 register_frame = tk.Frame(root)
+
+create_new_chat_frame = tk.Frame(root)
+join_to_chat_frame = tk.Frame(root)
+
 main_frame = tk.Frame(root)
 
 # Фрейм входа
@@ -294,6 +319,12 @@ chat_listbox.pack(side=tk.LEFT, padx=10, pady=10)
 
 chat_listbox.bind("<<ListboxSelect>>", change_chat)  # Связывание функции change_chat с событием выбора элемента списка
 
+button1 = ttk.Button(chat_panel, text="Создать новый чат", command=show_create_new_chat_page)
+button1.pack()
+
+button2 = ttk.Button(chat_panel, text="Войти в чат", command=show_join_to_chat_page)
+button2.pack()
+
 # Создание фрейма для отображения чата (справа)
 chat_frame = tk.Frame(main_frame)
 # chat_frame.pack(fill=tk.BOTH, expand=True)
@@ -310,20 +341,58 @@ entry.pack(padx=10, pady=10, expand=True)
 send_button = tk.Button(chat_frame, text="Отправить", command=send_message)
 send_button.pack(padx=10, pady=10)
 
+# Фрейм входа в чат
+label_chat_name = ttk.Label(join_to_chat_frame, text="Имя чата:")
+label_chat_name.pack()
+login_entry_chat_name = ttk.Entry(join_to_chat_frame)
+login_entry_chat_name.pack()
+
+label_chat_password = ttk.Label(join_to_chat_frame, text="Пароль:")
+label_chat_password.pack()
+login_entry_chat_password = ttk.Entry(join_to_chat_frame, show="•")
+login_entry_chat_password.pack()
+
+button_join_to_chat = ttk.Button(join_to_chat_frame, text="Войти в чат", command=join_to_chat)
+button_join_to_chat.pack()
+
+button_show_create_new_chat = ttk.Button(join_to_chat_frame, text="Создать новый чат",
+                                         command=show_create_new_chat_page)
+button_show_create_new_chat.pack()
+
+button_back_to_main_frame1 = ttk.Button(join_to_chat_frame, text="Назад", command=show_main_page)
+button_back_to_main_frame1.pack()
+
+# Фрейм создания нового чата
+label_chat_name = ttk.Label(create_new_chat_frame, text="Имя чата:")
+label_chat_name.pack()
+register_entry_chat_name = ttk.Entry(create_new_chat_frame)
+register_entry_chat_name.pack()
+
+label_chat_password = ttk.Label(create_new_chat_frame, text="Пароль:")
+label_chat_password.pack()
+register_entry_chat_password = ttk.Entry(create_new_chat_frame, show="•")
+register_entry_chat_password.pack()
+
+label_confirm_chat_password = ttk.Label(create_new_chat_frame, text="Подтвердите пароль:")
+label_confirm_chat_password.pack()
+register_entry_confirm_chat_password = ttk.Entry(create_new_chat_frame, show="•")
+register_entry_confirm_chat_password.pack()
+
+button_create_new_chat = ttk.Button(create_new_chat_frame, text="Создать новый чат", command=create_new_chat)
+button_create_new_chat.pack()
+
+button_show_join_to_chat = ttk.Button(create_new_chat_frame, text="Войти в чат", command=show_join_to_chat_page)
+button_show_join_to_chat.pack()
+
+button_back_to_main_frame2 = ttk.Button(create_new_chat_frame, text="Назад", command=show_main_page)
+button_back_to_main_frame2.pack()
+
 # Показать страницу входа при запуске
 show_login_page()
 
-receive_thread = threading.Thread(target=receive_messages, args=(client_socket,))
+receive_thread = threading.Thread(target=receive_answers, args=(client_socket,))
 receive_thread.start()
 
 root.mainloop()
 
 client_socket.close()
-
-#######
-
-# root = tk.Tk()
-# root.title("Мессенджер")
-#
-# # Создание фрейма для размещения выбора чатов слева и чата справа
-# main_frame.pack(fill=tk.BOTH, expand=True)
